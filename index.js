@@ -135,15 +135,26 @@
     return 'object';
   }
 
-  function deepDiff(lhs, rhs, changes, prefilter, path, key, stack) {
+  function deepDiff(lhs, rhs, changes, prefilter, findComparer, path, key, stack) {
     path = path || [];
     var currentPath = path.slice(0);
+
     if (typeof key !== 'undefined') {
-      if (prefilter && prefilter(currentPath, key, { lhs: lhs, rhs: rhs })) {
+      if (findComparer) {
+        var comparer = findComparer(currentPath, key);
+        if (comparer) {
+          currentPath.push(key);
+          comparer(lhs, rhs, changes, prefilter, findComparer, currentPath, key, stack);
+          return;
+        }
+      }
+
+      if (prefilter && prefilter(currentPath, key, {lhs: lhs, rhs: rhs})) {
         return;
       }
       currentPath.push(key);
     }
+
     var ltype = typeof lhs;
     var rtype = typeof rhs;
     if (ltype === 'undefined') {
@@ -166,7 +177,7 @@
             if (i >= rhs.length) {
               changes(new DiffArray(currentPath, i, new DiffDeleted(undefined, lhs[i])));
             } else {
-              deepDiff(lhs[i], rhs[i], changes, prefilter, currentPath, i, stack);
+              deepDiff(lhs[i], rhs[i], changes, prefilter, findComparer, currentPath, i, stack);
             }
           }
           while (i < rhs.length) {
@@ -178,14 +189,14 @@
           akeys.forEach(function(k, i) {
             var other = pkeys.indexOf(k);
             if (other >= 0) {
-              deepDiff(lhs[k], rhs[k], changes, prefilter, currentPath, k, stack);
+              deepDiff(lhs[k], rhs[k], changes, prefilter, findComparer, currentPath, k, stack);
               pkeys = arrayRemove(pkeys, other);
             } else {
-              deepDiff(lhs[k], undefined, changes, prefilter, currentPath, k, stack);
+              deepDiff(lhs[k], undefined, changes, prefilter, findComparer, currentPath, k, stack);
             }
           });
-          pkeys.forEach(function(k) {
-            deepDiff(undefined, rhs[k], changes, prefilter, currentPath, k, stack);
+          pkeys.forEach(function (k) {
+            deepDiff(undefined, rhs[k], changes, prefilter, findComparer, currentPath, k, stack);
           });
         }
         stack.length = stack.length - 1;
@@ -197,7 +208,7 @@
     }
   }
 
-  function accumulateDiff(lhs, rhs, prefilter, accum) {
+  function accumulateDiff(lhs, rhs, prefilter, findComparer, accum) {
     accum = accum || [];
     deepDiff(lhs, rhs,
       function(diff) {
@@ -205,7 +216,7 @@
           accum.push(diff);
         }
       },
-      prefilter);
+      prefilter, findComparer);
     return (accum.length) ? accum : undefined;
   }
 
@@ -384,6 +395,18 @@
         return 'undefined' !== typeof conflict;
       },
       enumerable: true
+    },
+    DiffEdit: {
+      value: DiffEdit
+    },
+    DiffNew: {
+      value: DiffNew
+    },
+    DiffDeleted: {
+      value: DiffDeleted
+    },
+    DiffArray: {
+      value: DiffArray
     },
     noConflict: {
       value: function() {
